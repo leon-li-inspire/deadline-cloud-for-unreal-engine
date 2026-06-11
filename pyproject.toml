@@ -31,7 +31,7 @@ dependencies = [
     "deadline >= 0.55.1,< 0.57",
     "openjd-adaptor-runtime >= 0.9.4,< 0.10",
     "openjd-model >= 0.9.0, < 0.10",
-    "p4python == 2025.1.2767466",
+    "p4python == 2026.1.2974490",
     "psutil >= 5.9.0"
 ]
 
