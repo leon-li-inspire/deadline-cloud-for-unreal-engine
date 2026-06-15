@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from deadline.client.submitter_api import SubmitterAPI, SubmitterSettings
@@ -77,9 +77,7 @@ class UnrealSubmitterAPI(SubmitterAPI):
                     {"name": "LevelSequencePath", "value": settings.level_sequence_path}
                 )
             if settings.extra_cmd_args:
-                parameter_values.append(
-                    {"name": "ExtraCmdArgs", "value": settings.extra_cmd_args}
-                )
+                parameter_values.append({"name": "ExtraCmdArgs", "value": settings.extra_cmd_args})
 
         parameter_values.extend(
             {"name": param["name"], "value": param["value"]} for param in queue_parameters
