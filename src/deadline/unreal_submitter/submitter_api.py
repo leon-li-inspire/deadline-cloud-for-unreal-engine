@@ -42,10 +42,31 @@ class UnrealSubmitterAPI(SubmitterAPI):
         settings: SubmitterSettings,
         host_requirements: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        from .common import get_default_job_template
-
-        job_template = get_default_job_template()
-        job_template["name"] = settings.name
+        job_template: dict[str, Any] = {
+            "specificationVersion": "jobtemplate-2023-09",
+            "name": settings.name,
+            "parameterDefinitions": [
+                {
+                    "name": "UnrealProjectPath",
+                    "type": "PATH",
+                    "objectType": "FILE",
+                    "dataFlow": "IN",
+                },
+            ],
+            "steps": [
+                {
+                    "name": "Render",
+                    "script": {
+                        "actions": {
+                            "onRun": {
+                                "command": "UnrealEditor-Cmd",
+                                "args": ["{{Param.UnrealProjectPath}}"],
+                            }
+                        }
+                    },
+                }
+            ],
+        }
 
         if isinstance(settings, UnrealSubmitterSettings) and settings.description:
             job_template["description"] = settings.description
