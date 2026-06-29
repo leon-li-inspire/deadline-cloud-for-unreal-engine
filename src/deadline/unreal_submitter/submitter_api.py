@@ -5,6 +5,9 @@ import os
 from dataclasses import dataclass
 from typing import Any, Optional
 
+import unreal  # type: ignore[import]
+
+from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.submitter_api import SubmitterAPI, SubmitterSettings
 
 
@@ -23,8 +26,6 @@ class UnrealSubmitterAPI(SubmitterAPI):
     """SubmitterAPI implementation for Unreal Engine submissions."""
 
     def get_settings(self) -> UnrealSubmitterSettings:
-        import unreal  # type: ignore[import]
-
         settings = UnrealSubmitterSettings()
 
         project_dir = unreal.Paths.project_dir()
@@ -42,17 +43,46 @@ class UnrealSubmitterAPI(SubmitterAPI):
         settings: SubmitterSettings,
         host_requirements: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
+        parameter_definitions: list[dict[str, Any]] = [
+            {
+                "name": "UnrealProjectPath",
+                "type": "PATH",
+                "objectType": "FILE",
+                "dataFlow": "IN",
+            },
+        ]
+        command_args: list[str] = ["{{Param.UnrealProjectPath}}"]
+
+        # Optional parameters MUST mirror exactly what get_parameter_values emits:
+        # any value emitted under a non-"deadline:" name without a matching
+        # parameterDefinition here makes the bundle fail validation (the bundle
+        # loader rejects "a value provided for an undefined parameter", and
+        # split_parameter_args raises KeyError on the missing "type"). Guard each
+        # definition with the same truthiness check used when emitting its value
+        # so the two sides stay in lockstep.
+        if isinstance(settings, UnrealSubmitterSettings):
+            if settings.level_path:
+                parameter_definitions.append(
+                    {"name": "LevelPath", "type": "STRING", "minLength": 1}
+                )
+                command_args.append("{{Param.LevelPath}}")
+            if settings.level_sequence_path:
+                parameter_definitions.append(
+                    {"name": "LevelSequencePath", "type": "STRING", "minLength": 1}
+                )
+                command_args.append("{{Param.LevelSequencePath}}")
+            if settings.extra_cmd_args:
+                parameter_definitions.append(
+                    {"name": "ExtraCmdArgs", "type": "STRING", "minLength": 1}
+                )
+                command_args.append("{{Param.ExtraCmdArgs}}")
+
         job_template: dict[str, Any] = {
             "specificationVersion": "jobtemplate-2023-09",
-            "name": settings.name,
-            "parameterDefinitions": [
-                {
-                    "name": "UnrealProjectPath",
-                    "type": "PATH",
-                    "objectType": "FILE",
-                    "dataFlow": "IN",
-                },
-            ],
+            # OpenJD requires a non-empty job name; fall back if the scene had no
+            # resolvable .uproject name so CreateJob does not reject the template.
+            "name": settings.name or "UnrealJob",
+            "parameterDefinitions": parameter_definitions,
             "steps": [
                 {
                     "name": "Render",
@@ -60,7 +90,7 @@ class UnrealSubmitterAPI(SubmitterAPI):
                         "actions": {
                             "onRun": {
                                 "command": "UnrealEditor-Cmd",
-                                "args": ["{{Param.UnrealProjectPath}}"],
+                                "args": command_args,
                             }
                         }
                     },
@@ -107,8 +137,6 @@ class UnrealSubmitterAPI(SubmitterAPI):
         return parameter_values
 
     def get_asset_references(self, settings: SubmitterSettings) -> dict[str, Any]:
-        from deadline.client.job_bundle.submission import AssetReferences
-
         asset_refs = AssetReferences(
             input_filenames=set(settings.input_filenames),
             input_directories=set(settings.input_directories),
