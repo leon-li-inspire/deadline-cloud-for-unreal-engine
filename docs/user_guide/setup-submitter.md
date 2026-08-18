@@ -206,31 +206,29 @@ This example will use the Meerkat Demo from the Unreal Marketplace:
 1. You can go to Deadline Cloud Monitor and watch the progress of your job. 
 
 
-# Submission Hooks (Pre-GUI)
+# Submission Hooks
 
-The submitter runs **pre-GUI** submission hooks sourced from `DEADLINE_HOOKS_DIR`. A pre-GUI hook runs when a Deadline Cloud job's **Details panel is built**, letting a studio pre-populate the job's shared settings (name, description, priority, initial state, maximum failed tasks / retries) and template parameters *before* the artist reviews them.
+This submitter supports Deadline Cloud **submission hooks** (pre-GUI, pre-submission, and post-submission) sourced from `DEADLINE_HOOKS_DIR`. See the client's [submission hooks documentation](https://github.com/aws-deadline/deadline-cloud/blob/mainline/docs/submission-hooks.md) for the `hooks.yaml` format, the hook input/output contract, and the recognized job properties. The Unreal-specific behavior below is not covered there.
 
-## Enable pre-GUI hooks
+## Enable
 
-1. Set `DEADLINE_HOOKS_DIR` to a directory containing a `hooks.yaml` with a `preGUI` entry (see the Deadline Cloud submission-hooks documentation for the file format). This environment variable must be set **before** you launch Unreal Editor.
+1. Set `DEADLINE_HOOKS_DIR` to your hooks directory **before launching Unreal Editor** — the editor snapshots the environment at startup (and the submit-time subprocess inherits that snapshot), so setting it afterward has no effect until you relaunch. For example, on Windows:
+	```
+	setx DEADLINE_HOOKS_DIR "C:\deadline-hooks"
+	```
 1. Allow environment-sourced hooks:
 	```
 	deadline config set settings.allow_environment_hooks true
 	```
-1. (Optional) Skip the per-run confirmation dialog:
-	```
-	deadline config set settings.auto_accept true
-	```
-	When `auto_accept` is `false` (the default), opening a job's Details panel shows a confirmation dialog listing the hooks that will run; the hook applies only after you accept.
 
-## When pre-GUI hooks run
+## Unreal-specific behavior
 
-Pre-GUI hooks are **panel-tied** — they run when a job's Deadline Cloud Details panel is built:
+The client docs note that in-application (DCC) submitters do not run the pre-GUI phase — **this submitter is the exception**. It has no Qt submit dialog, so its **pre-GUI** hooks run when a job's **C++ Details panel is built**: the `DeadlineCloudRenderJob` data-asset editor, and the **Movie Render Queue → Deadline Cloud → Preset Overrides** panel.
 
-- **Data asset** — when you open a `DeadlineCloudRenderJob` (`UDeadlineCloudJob`) data asset in the editor.
-- **Movie Render Queue** — when you select a Deadline Cloud job in the Movie Render Queue so its **Preset Overrides** panel is shown. Because **Render (Remote)** submits every job in the queue, open each job you want hooked at least once; a job whose panel is never opened is submitted without the pre-GUI hook applied.
-
-A value a hook sets is skipped (and surfaced as an editor notification instead of written to the job) when it fails the panel's validation, matches no field, or names a parameter the submitter resolves itself at submit time (for example `ProjectFilePath`, `ExtraCmdArgs`, `Frames`, or Perforce settings).
+- **Confirmation:** the pre-GUI phase shows an `unreal.EditorDialog` gated by `settings.auto_accept` (the hook applies only if you accept). **Pre-submission and post-submission hooks currently run without a confirmation prompt** — they execute at submit time regardless of `auto_accept`.
+- **MRQ coverage:** `Render (Remote)` submits every queued job, but the pre-GUI hook applies only to a job **with a Deadline Cloud preset assigned** whose panel has been opened; a job with no preset is submitted un-hooked (silently), so open each such job at least once.
+- **Rejected values:** parameters the submitter resolves itself at submit time (`ProjectFilePath`, `ExtraCmdArgs`, `Frames`, Perforce settings, …) and unrecognized `deadline:` keys are reported to the artist as an editor notification rather than applied.
+- A pre-GUI hook mutates only the in-memory panel (it does not save the `.uasset`) and re-applies the first time a saved job's panel is opened in a new editor session.
 
 
 # Update Notifications
